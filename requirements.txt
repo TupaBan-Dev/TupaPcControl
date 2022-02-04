@@ -1,0 +1,9 @@
+aiogram
+asyncio
+keyboard
+psutil
+PyAutoGui
+pillow
+GPUtil
+humanize
+configparser
