@@ -20,3 +20,6 @@ python main.py
 1) bot_token - The bot token that you can get from @BotFather
 2) bot_password - The password from the bot, which you can come up with yourself, is used to call the inline menu
 3) admin_id - Your ID
+4) start_message - Whether to respond to the /start command (off, on)
+5) startup_message - Should I write a message to the administrator about the launch of the bot (off, on)
+6) shutdown_message - Should I write a message to the administrator about turning off the bot (off, on)

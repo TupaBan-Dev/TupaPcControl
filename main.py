@@ -18,17 +18,17 @@ import psutil
 import GPUtil
 import humanize
 from datetime import datetime
+import logging
 
 from keyboards import main_menu_1, main_menu_2, main_menu_3
+
+# Логирование
+logging.basicConfig(filename="log.txt", level=logging.INFO)
 
 # Переменные
 
 # Заблокирована ли клавиатура при старте
 is_keyboard_blocked = False
-
-# Путь до браузера и регистрация браузера
-browser_path = "C:/Program Files/Mozilla Firefox/firefox.exe"
-webbrowser.register("FireFox", None, webbrowser.BackgroundBrowser(browser_path))
 
 # Время запуска
 start_time = time()
@@ -41,11 +41,14 @@ config.read("config.ini")
 bot_token = config["My PC"]["bot_token"]
 bot_password = config["My PC"]["bot_password"]
 admin_id = int(config["My PC"]["admin_id"])
+start_message = config["My PC"]["start_message"]
+startup_message = config["My PC"]["startup_message"]
+shutdown_message = config["My PC"]["shutdown_message"]
 
 # Бот
 storage = MemoryStorage()
 
-bot = Bot(token=bot_token)
+bot = Bot(token=bot_token, parse_mode="HTML")
 dp = Dispatcher(bot, storage=storage)
 
 
@@ -71,6 +74,10 @@ class FSMGetMessageInput(StatesGroup):
     message_text = State()
 
 
+class FSMGetMessageKeySend(StatesGroup):
+    message_text = State()
+
+
 # Функции
 
 
@@ -85,10 +92,10 @@ async def convert_bytes(number):
 # Генерация случайного имени
 async def generate_random(long):
     chars = "abcdefghijklnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
-    random_id = ""
+    random_name = ""
     for i in range(long):
-        random_id += random.choice(chars)
-    return random_id
+        random_name += random.choice(chars)
+    return random_name
 
 
 # Блокировка или Разблокировка клавиатуры
@@ -113,12 +120,37 @@ async def get_up_time():
     return up_time
 
 
+# Старт бота
+async def on_startup(_):
+    info = await bot.get_me()
+    print(f"""Бот запущен
+    \rАйди - {info.id}
+    \rСсылка - https://t.me/{info.username}""")
+    if startup_message == "on":
+        await bot.send_message(admin_id, "Бот запущен!")
+    else:
+        pass
+
+
+# Выключение бота
+async def on_shutdown(_):
+    print("Бот выключен")
+    if shutdown_message == "on":
+        await bot.send_message(admin_id, "Бот выключен!")
+    else:
+        pass
+
+
 # Команды бота
 
 # Команда Старт
 @dp.message_handler(commands="start")
 async def start(message: types.Message):
-    await message.answer("Привет, я бот для управления ПК. Введи пароль с помощью команды /password")
+    if start_message == "on":
+        await message.delete()
+        await message.answer("Привет, я бот для управления ПК. Введи пароль с помощью команды /password")
+    else:
+        pass
 
 
 # Команда ввода пароля
@@ -126,9 +158,13 @@ async def start(message: types.Message):
 async def password(message: types.Message):
     entered_password = message.get_args().split(" ")[0]
     if entered_password == bot_password:
+        await message.delete()
         await message.answer("Меню Управления", reply_markup=main_menu_1)
     else:
-        await message.answer("Пароль введён неверно ): Попробуйте снова")
+        bot_message = await message.answer("Пароль введён неверно ): Попробуйте снова")
+        await message.delete()
+        await asyncio.sleep(5)
+        await bot_message.delete()
 
 
 # Команда выключения ПК
@@ -201,7 +237,7 @@ async def command_turn_off_bot(message: types.Message):
 async def command_open_link(message: types.Message):
     if message.from_user.id == admin_id:
         link = message.get_args().split(" ")[0]
-        webbrowser.get(using="FireFox").open_new_tab(link)
+        webbrowser.get().open_new_tab(link)
         await message.delete()
     else:
         pass
@@ -225,7 +261,7 @@ async def commands_bot_status(message: types.Message):
 │	 ├─Использовано {gpu.memoryUsed} Mb
 │	 └─Всего {gpu.memoryTotal} Mb
 └─Работает уже {await get_up_time()}</code>
-""", parse_mode="HTML")
+""")
         await asyncio.sleep(10)
         await bot_message.delete()
     else:
@@ -280,7 +316,7 @@ async def command_open_image(message: types.Message):
             await message.photo[-1].download(destination_file=f"download/{random_name}.png")
             image = Image.open(f"download/{random_name}.png")
             image.show()
-            keyboard.send("F11")
+            os.remove(f"download/{random_name}.png")
             bot_message = await message.answer("Картинка открыта")
             await asyncio.sleep(2)
             await bot_message.delete()
@@ -360,6 +396,24 @@ async def command_send_message_input(message: types.Message):
         pass
 
 
+# Нажатие клавиши на клавиатуре
+@dp.message_handler(commands=["key_send"])
+async def command_key_send(message: types.Message):
+    if message.from_user.id == admin_id:
+        await message.delete()
+        try:
+            keyboard.send(message.get_args())
+            bot_message = await message.answer(f"Клавиша <code>{message.get_args()}</code> нажата")
+            await asyncio.sleep(5)
+            await bot_message.delete()
+        except ValueError:
+            bot_message = await message.answer(f"Клавиши <code>{message.get_args()}</code> не существует")
+            await asyncio.sleep(5)
+            await bot_message.delete()
+    else:
+        pass
+
+
 # Инлайн
 
 # Инлайн выключение пк
@@ -411,7 +465,7 @@ async def inline_getting_link_to_open(message: types.Message, state: FSMContext)
         data["link"] = message.text
         link = data["link"]
     await message.delete()
-    webbrowser.get(using="FireFox").open_new_tab(link)
+    webbrowser.get().open_new_tab(link)
     await state.finish()
     bot_message = await message.answer(f"Ссылка {link} открыта")
     await asyncio.sleep(2)
@@ -435,7 +489,7 @@ async def inline_check_state(callback: types.CallbackQuery):
 │	 ├─Использовано {gpu.memoryUsed} Mb
 │	 └─Всего {gpu.memoryTotal} Mb
 └─Работает уже {await get_up_time()}</code>
-""", parse_mode="HTML")
+""")
     await asyncio.sleep(10)
     await bot_message.delete()
 
@@ -481,7 +535,7 @@ async def inline_getting_link_to_open(message: types.Message, state: FSMContext)
     await message.delete()
     image = Image.open(f"download/{random_name}.png")
     image.show()
-    keyboard.send("F11")
+    os.remove(f"download/{random_name}.png")
     bot_message = await message.answer("Картинка открыта")
     await state.finish()
     await asyncio.sleep(2)
@@ -522,13 +576,20 @@ async def inline_send_alert(callback: types.CallbackQuery):
 # Инлайн отправка уведомления - получения текста
 @dp.message_handler(state=FSMGetMessageAlert.message_text)
 async def inline_send_alert_get_message(message: types.Message, state: FSMContext):
-    bot_message = await message.answer("Сообщение отправлено")
-    pyautogui.alert(message.text, "TupaPcControl")
-    await message.delete()
-    await state.finish()
-    bot_message = await bot_message.edit_text("Диалоговое окно закрыто")
-    await asyncio.sleep(5)
-    await bot_message.delete()
+    if message.text == "/cancel":
+        await message.delete()
+        await state.finish()
+        bot_message = await message.answer("Сообщение не отправлено. Вы отменили отправление")
+        await asyncio.sleep(5)
+        await bot_message.delete()
+    else:
+        bot_message = await message.answer("Сообщение отправлено")
+        pyautogui.alert(message.text, "TupaPcControl")
+        await message.delete()
+        await state.finish()
+        bot_message = await bot_message.edit_text("Диалоговое окно закрыто")
+        await asyncio.sleep(5)
+        await bot_message.delete()
 
 
 # Инлайн отправка сообщение и получение ответа
@@ -541,13 +602,49 @@ async def inline_send_alert(callback: types.CallbackQuery):
 # Инлайн отправка сообщение и получение ответа - получения текста
 @dp.message_handler(state=FSMGetMessageInput.message_text)
 async def inline_send_alert_get_message(message: types.Message, state: FSMContext):
-    bot_message = await message.answer("Сообщение отправлено")
-    answer = pyautogui.prompt(message.text, "TupaPcControl")
+    if message.text == "/cancel":
+        await message.delete()
+        await state.finish()
+        bot_message = await message.answer("Сообщение не отправлено. Вы отменили отправление")
+        await asyncio.sleep(5)
+        await bot_message.delete()
+    else:
+        bot_message = await message.answer("Сообщение отправлено")
+        answer = pyautogui.prompt(message.text, "TupaPcControl")
+        await message.delete()
+        await state.finish()
+        bot_message = await bot_message.edit_text(f"Ответ - {answer}")
+        await asyncio.sleep(3)
+        await bot_message.delete()
+
+
+# Инлайн нажатие клавиши на клавиатуре
+@dp.callback_query_handler(text="send_key")
+async def inline_send_key(callback: types.CallbackQuery):
+    await FSMGetMessageKeySend.message_text.set()
+    await callback.answer("Введите сообщение для отправки")
+
+
+# Инлайн нажатие клавиши на клавиатуре - получение текста
+@dp.message_handler(state=FSMGetMessageKeySend.message_text)
+async def inline_send_key_get_message(message: types.Message, state: FSMContext):
     await message.delete()
     await state.finish()
-    bot_message = await bot_message.edit_text(f"Ответ - {answer}")
-    await asyncio.sleep(3)
-    await bot_message.delete()
+    if message.text == "/cancel":
+        await state.finish()
+        bot_message = await message.answer("Клавиша не нажата. Вы отменили нажатие")
+        await asyncio.sleep(5)
+        await bot_message.delete()
+    else:
+        try:
+            keyboard.send(message.text)
+            bot_message = await message.answer(f"Клавиша <code>{message.text}</code> нажата")
+            await asyncio.sleep(5)
+            await bot_message.delete()
+        except ValueError:
+            bot_message = await message.answer(f"Клавиши <code>{message.text}</code> не существует")
+            await asyncio.sleep(5)
+            await bot_message.delete()
 
 
 # Инлайн переход по страницам меню
@@ -586,4 +683,4 @@ async def inline_navigation_menu(callback: types.CallbackQuery):
 
 
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+    executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown)
