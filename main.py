@@ -23,6 +23,9 @@ import logging
 from keyboards import main_menu_1, main_menu_2, main_menu_3
 
 # Логирование
+file = open("log.txt", "w")
+file.close()
+
 logging.basicConfig(filename="log.txt", level=logging.INFO)
 
 # Переменные
@@ -90,21 +93,21 @@ async def convert_bytes(number):
 
 
 # Генерация случайного имени
-async def generate_random(long):
+async def generate_random(length):
     chars = "abcdefghijklnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
     random_name = ""
-    for i in range(long):
+    for i in range(length):
         random_name += random.choice(chars)
     return random_name
 
 
 # Блокировка или Разблокировка клавиатуры
-async def set_is_keyboard_blocked(meaning):
+async def set_is_keyboard_blocked(value):
     global is_keyboard_blocked
-    is_keyboard_blocked = meaning
+    is_keyboard_blocked = value
 
 
-# Получения данных видеокарты
+# Получение видеокарт
 async def get_gpu():
     for gpu in GPUtil.getGPUs():
         return gpu
@@ -112,11 +115,12 @@ async def get_gpu():
 
 # Получения аптайма
 async def get_up_time():
+    humanize.i18n.activate("ru_RU")
     up_time = humanize.precisedelta(
         datetime.fromtimestamp(
             psutil.boot_time()
         )
-    ).replace("hour", "часов").replace("minutes", "минут").replace("and", "и").replace("seconds", "секунд")
+    )
     return up_time
 
 
